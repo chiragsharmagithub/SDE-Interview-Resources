@@ -388,41 +388,70 @@
         .loader { display: none; text-align: center; padding: var(--space-xl); color: var(--text-secondary); font-family: var(--font-mono); animation: pulse 1.5s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 
-        /* Media Queries */
+        /* Mobile & Tablet Media Queries */
         @media (max-width: 1024px) {
             .app-container { padding: var(--space-lg) var(--space-md); }
+            .dash-grid-top, .dash-grid-modules { gap: var(--space-md); }
         }
 
         @media (max-width: 768px) {
-            .app-container { padding: var(--space-md) var(--space-sm); }
-            .top-bar-wrapper { display: flex; flex-direction: column; gap: var(--space-md); position: relative; margin-bottom: var(--space-lg); }
-            .top-bar-right { position: absolute; top: 0; right: 0; }
+            .app-container { padding: var(--space-md); }
             
-            .dash-header h1 { font-size: 2rem; }
-            .dash-circular-progress { width: 120px; height: 120px; }
-            .dash-percent-container { font-size: 2rem; }
-            .momentum-card-mini { width: 100%; justify-content: center; margin-top: var(--space-md); }
+            /* Responsive Navigation/Top Bar */
+            .top-bar-wrapper { 
+                display: flex; 
+                flex-wrap: wrap; 
+                justify-content: space-between; 
+                gap: var(--space-md);
+            }
+            .top-bar-left { display: none; }
+            .top-bar-center { order: 2; width: 100%; overflow-x: auto; }
+            .top-bar-right { order: 1; width: 100%; justify-content: flex-end; margin-bottom: -8px;}
+            .tabs-container { width: 100%; justify-content: flex-start; }
             
-            .header-top { flex-direction: column; align-items: stretch; gap: var(--space-lg); }
+            /* Responsive Headers & Trackers */
+            .dash-header h1 { font-size: 2.2rem; }
+            .momentum-card-mini { flex-wrap: wrap; justify-content: center; text-align: center; width: 100%; margin-top: var(--space-md); }
+            .mini-text { display: flex; flex-direction: column; align-items: center; width: 100%; }
+            
+            .header-top { flex-direction: column; align-items: stretch; gap: var(--space-sm); }
             .header h1 { font-size: 1.8rem; margin-top: 2px; }
             
-            .toolbar { flex-direction: column; align-items: stretch; padding: var(--space-md); gap: var(--space-md); }
-            .toolbar-group { flex-direction: column; align-items: stretch; width: 100%; gap: var(--space-sm); }
-            .toolbar-group > * { width: 100%; }
+            /* Responsive Toolbar Controls */
+            .toolbar { padding: var(--space-md); flex-direction: column; align-items: stretch; gap: var(--space-md); }
+            .toolbar-group { width: 100%; flex-direction: column; align-items: stretch; gap: var(--space-sm); }
             .toolbar-group label { display: none; }
-            input[type="text"] { min-width: 100%; }
+            .toolbar-group input, .toolbar-group select, .toolbar-group button { width: 100%; min-width: 100%; justify-content: center; }
             
+            /* Responsive Tables */
             .data-table-wrapper { padding-bottom: var(--space-sm); }
-            th, td { padding: 14px 12px; font-size: 0.9rem; }
-            td:nth-child(2) { white-space: normal; min-width: 160px; }
+            th, td { padding: 12px 10px; font-size: 0.85rem; }
+            td:nth-child(2) { white-space: normal; min-width: 200px; }
             .metric-bar-container { width: 50px; margin-right: 6px; }
             .badge { padding: 4px 8px; font-size: 0.75rem; }
+            
+            /* Responsive Modals */
+            .modal-content { width: 95%; max-height: 90vh; border-radius: 16px; }
+            .modal-body { padding: var(--space-md); font-size: 0.95rem; }
         }
+
+        @media (max-width: 600px) {
+            /* Force Single Column on Smaller Screens */
+            .dash-grid-top, .dash-grid-modules { grid-template-columns: 1fr; }
+            .dash-card { padding: var(--space-md); }
+            .dash-circular-progress { width: 120px; height: 120px; }
+            .dash-percent-container { font-size: 2rem; }
+            .momentum-card-mini { width: 100%; justify-content: space-between; }
+        }
+
         @media (max-width: 480px) {
-            td:nth-child(2) { min-width: 130px; }
+            .dash-header h1 { font-size: 1.8rem; }
+            td:nth-child(2) { min-width: 150px; }
             .metric-bar-container { display: none; }
             .metric-value { font-weight: 600; }
-            .company-tag { font-size: 0.75rem; padding: 4px 6px; }
+            .company-tag { font-size: 0.7rem; padding: 4px 6px; }
+            .momentum-card { min-width: unset; width: 100%; }
+            .modal-body button { width: 100%; justify-content: center; }
         }
     </style>
 </head>
@@ -1359,6 +1388,7 @@ const sqlTheoryDb = [
 /**
  * ============================================================================
  * STATE MANAGEMENT
+ * Single source of truth for the application state.
  * ============================================================================
  */
 const state = {
@@ -1371,7 +1401,14 @@ const state = {
     completed: new Set(JSON.parse(localStorage.getItem('dsa_completed') || '[]'))
 };
 
+// Difficulty mapping for sorting
 const diffVal = { "Easy": 1, "Medium": 2, "Hard": 3 };
+
+/**
+ * ============================================================================
+ * CORE LOGIC & DATA TRANSFORMATIONS
+ * ============================================================================
+ */
 
 function getActiveDB() {
     if (state.mainTab === 'dsa') return db;
@@ -1382,6 +1419,7 @@ function getActiveDB() {
     return db;
 }
 
+// Flattens DB to apply search and global transforms easily
 function getFlatQuestions() {
     let flat = [];
     const activeDb = getActiveDB();
@@ -1399,8 +1437,11 @@ function getFlatQuestions() {
     return flat;
 }
 
+// Applies active Search and Sort to an array of questions
 function sortAndFilterQuestions(questions) {
     let filtered = questions;
+
+    // Apply Search
     if (state.searchQuery) {
         const query = state.searchQuery.toLowerCase();
         filtered = filtered.filter(q => 
@@ -1409,6 +1450,8 @@ function sortAndFilterQuestions(questions) {
             q.companies.some(c => c.toLowerCase().includes(query))
         );
     }
+
+    // Apply Sort
     if (state.sortBy !== 'default') {
         filtered.sort((a, b) => {
             switch (state.sortBy) {
@@ -1419,12 +1462,14 @@ function sortAndFilterQuestions(questions) {
             }
         });
     }
+
     return filtered;
 }
 
 /**
  * ============================================================================
  * DOM RENDER ENGINE
+ * Uses DocumentFragments to batch DOM updates for max performance.
  * ============================================================================
  */
 const DOM = {
@@ -1441,6 +1486,7 @@ const DOM = {
     closeModalBtn: document.getElementById('closeModalBtn')
 };
 
+// Visual components builders
 function createBadge(diff) {
     return `<span class="badge ${diff.toLowerCase()}">${diff}</span>`;
 }
